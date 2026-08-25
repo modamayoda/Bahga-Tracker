@@ -1,7 +1,7 @@
 # =============================================================
 # StartupLogger.ps1
-# يسجل فتح وقفل البرامج (Event ID 4688 / 4689) كل 15 دقيقة
-# ملف CSV منفصل لكل يوم - يضيف عليه لو موجود
+# Logs process creation/termination (Event ID 4688 / 4689) every 15 minutes.
+# Appends to a daily CSV log file.
 # =============================================================
 
 $logRoot = "C:\ActivityLogs"

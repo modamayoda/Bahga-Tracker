@@ -1,7 +1,7 @@
 # =============================================================
 # WeeklyArchive.ps1
-# يضغط ملفات اللوج والملخصات الأقدم من 7 أيام في ملف ZIP
-# ويشيلها من المكان الأصلي بعد الضغط - يشتغل كل أسبوع
+# Compresses log and summary files older than 7 days into a ZIP archive,
+# then removes original files from the source directory. Runs weekly.
 # =============================================================
 
 $logRoot     = "C:\ActivityLogs"

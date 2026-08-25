@@ -1,11 +1,11 @@
 # =============================================================
 # BackupLogs.ps1
-# ينسخ ملفات اللوج والملخصات لمسار خارجي (فلاشة / شبكة) لو متوصل
-# غيّر $backupPath للمسار المناسب عندك
+# Copies log and summary files to an external path (USB drive / network) if available.
+# Update $backupPath to match your target backup path.
 # =============================================================
 
 $logRoot    = "C:\ActivityLogs"
-$backupPath = "D:\ActivityBackup"   # <-- غيّر ده لمسار الفلاشة أو الشبكة
+$backupPath = "D:\ActivityBackup"   # <-- Change this to your USB drive or network path
 
 $driveRoot = Split-Path $backupPath -Qualifier
 if (Test-Path $driveRoot) {

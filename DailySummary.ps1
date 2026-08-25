@@ -1,7 +1,7 @@
 # =============================================================
 # DailySummary.ps1
-# يعمل ملخص نصي بسيط لعدد مرات فتح كل برنامج في اليوم
-# يشتغل مرة كل يوم الساعة 23:55
+# Generates a text summary of application launch counts for the day.
+# Runs daily at 23:55.
 # =============================================================
 
 $logRoot     = "C:\ActivityLogs"
@@ -14,8 +14,8 @@ if (Test-Path $todayFile) {
     $summary = $data | Where-Object { $_.EventType -eq "Opened" } |
         Group-Object ProcessName |
         Sort-Object Count -Descending |
-        ForEach-Object { "$($_.Name): $($_.Count) مرة" }
+        ForEach-Object { "$($_.Name): $($_.Count) times" }
 
-    $header = "ملخص نشاط يوم $(Get-Date -Format 'yyyy-MM-dd')`r`n" + ("-" * 40)
+    $header = "Activity Summary for $(Get-Date -Format 'yyyy-MM-dd')`r`n" + ("-" * 40)
     $header, $summary | Out-File -FilePath $summaryFile -Encoding UTF8
 }

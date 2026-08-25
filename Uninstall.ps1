@@ -1,6 +1,7 @@
 # =============================================================
 # Uninstall.ps1
-# Unregisters the 4 Scheduled Tasks and logs output to uninstall_log.txt.
+# Unregisters 5 Scheduled Tasks (including Watchdog),
+# resets NTFS permissions, and logs output to uninstall_log.txt.
 # =============================================================
 
 $ErrorActionPreference = "Continue"
@@ -16,7 +17,20 @@ if (-not $scriptSource) {
 }
 $uninstallLog = Join-Path $scriptSource "uninstall_log.txt"
 
-# 2. Helper Logging Function
+# 2. Load config for logRoot path
+$logRoot = "C:\ActivityLogs"
+$configFile = Join-Path $scriptSource "config.json"
+if (-not (Test-Path $configFile)) {
+    $configFile = Join-Path $logRoot "config.json"
+}
+if (Test-Path $configFile) {
+    try {
+        $configJson = Get-Content -Path $configFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($configJson.logRoot) { $logRoot = $configJson.logRoot }
+    } catch {}
+}
+
+# 3. Helper Logging Function
 function Log-Message {
     param (
         [string]$Message,
@@ -40,7 +54,9 @@ try {
 
     Log-Message "Starting Bahga Tracker Uninstallation..." "INFO" Cyan
 
-    $tasks = @("ActivityLogger", "DailySummary", "WeeklyArchive", "LogBackup")
+    # --- Step 1: Unregister Scheduled Tasks ---
+    Log-Message "`n1) Removing Scheduled Tasks..." "INFO" Cyan
+    $tasks = @("ActivityLogger", "DailySummary", "WeeklyArchive", "LogBackup", "TaskWatchdog")
     $successCount = 0
 
     foreach ($task in $tasks) {
@@ -59,25 +75,54 @@ try {
         }
     }
 
+    # --- Step 2: Reset NTFS Permissions ---
+    Log-Message "`n2) Resetting NTFS permissions on log directory..." "INFO" Cyan
+    if (Test-Path $logRoot) {
+        try {
+            # Remove hidden/system attributes
+            attrib -h -s $logRoot 2>&1 | Out-Null
+
+            # Reset to inherited permissions
+            $acl = Get-Acl $logRoot
+            $acl.SetAccessRuleProtection($false, $true)  # Re-enable inheritance
+            Set-Acl $logRoot $acl -ErrorAction Stop
+
+            Log-Message "[OK] NTFS permissions reset to default (inheritance enabled)." "SUCCESS" Green
+        } catch {
+            Log-Message "[WARN] Could not reset permissions: $($_.Exception.Message)" "WARNING" Yellow
+            Log-Message "You may need to manually adjust permissions on: $logRoot" "INFO" Gray
+        }
+    } else {
+        Log-Message "[INFO] Log directory not found: $logRoot (already removed?)" "INFO" Gray
+    }
+
+    # --- SUMMARY ---
     Log-Message "`n===================================================" "INFO" Yellow
     Log-Message "              UNINSTALLATION SUMMARY               " "INFO" Yellow
     Log-Message "===================================================" "INFO" Yellow
 
     if ($successCount -eq $tasks.Count) {
-        Log-Message "[OK] All Scheduled Tasks have been successfully unregistered." "SUCCESS" Green
+        Log-Message "[OK] All $($tasks.Count) Scheduled Tasks have been successfully unregistered." "SUCCESS" Green
     } else {
-        Log-Message "[!] Some tasks could not be unregistered. Check details in: $uninstallLog" "WARNING" Yellow
+        Log-Message "[!] $successCount/$($tasks.Count) tasks processed. Check details in: $uninstallLog" "WARNING" Yellow
     }
 
+    Log-Message ""
+    Log-Message "Note: Log files in '$logRoot' have NOT been deleted." "INFO" Cyan
+    Log-Message "To completely remove all data, manually delete: $logRoot" "INFO" Gray
+    Log-Message ""
     Log-Message "Log file saved at: $uninstallLog`n" "INFO" Gray
 
 } catch {
     Log-Message "`n[FATAL ERROR] An unexpected error occurred: $($_.Exception.Message)" "ERROR" Red
     Log-Message "Stack Trace: $($_.ScriptStackTrace)" "ERROR" Red
+} finally {
+    Write-Host ""
+    Write-Host "====================================================" -ForegroundColor Yellow
+    Write-Host "  Press ENTER to close this window..." -ForegroundColor Yellow
+    Write-Host "====================================================" -ForegroundColor Yellow
+    Read-Host
 }
 
 # To completely delete the log directory as well (optional - uncomment lines below):
-# attrib -h -s "C:\ActivityLogs"
-# Remove-Item "C:\ActivityLogs" -Recurse -Force
-
-
+# Remove-Item $logRoot -Recurse -Force

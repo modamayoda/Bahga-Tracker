@@ -1,7 +1,8 @@
 # =============================================================
 # Install.ps1
 # Run once as Administrator.
-# Performs setup: Audit Policy + Log Folder + 4 Scheduled Tasks
+# Performs setup: Audit Policy + Log Folder + Config + Permissions
+#                 + 5 Scheduled Tasks (including Watchdog)
 # Logs all output and errors to install_log.txt
 # =============================================================
 
@@ -18,7 +19,34 @@ if (-not $scriptSource) {
 }
 $installLog = Join-Path $scriptSource "install_log.txt"
 
-# 2. Helper Logging Function
+# 2. Load config.json for settings
+$configFile = Join-Path $scriptSource "config.json"
+$logRoot = "C:\ActivityLogs"
+$backupPath = "D:\ActivityBackup"
+$logIntervalMinutes = 15
+$summaryTime = "23:55"
+$backupIntervalHours = 1
+$watchdogIntervalMinutes = 30
+$setPermissions = $true
+$enableWatchdog = $true
+
+if (Test-Path $configFile) {
+    try {
+        $configJson = Get-Content -Path $configFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($configJson.logRoot)                               { $logRoot = $configJson.logRoot }
+        if ($configJson.backupPath)                            { $backupPath = $configJson.backupPath }
+        if ($configJson.logIntervalMinutes)                    { $logIntervalMinutes = $configJson.logIntervalMinutes }
+        if ($configJson.summaryTime)                           { $summaryTime = $configJson.summaryTime }
+        if ($configJson.backupIntervalHours)                   { $backupIntervalHours = $configJson.backupIntervalHours }
+        if ($configJson.antiTamper.watchdogIntervalMinutes)    { $watchdogIntervalMinutes = $configJson.antiTamper.watchdogIntervalMinutes }
+        if ($null -ne $configJson.antiTamper.setPermissions)   { $setPermissions = $configJson.antiTamper.setPermissions }
+        if ($null -ne $configJson.antiTamper.enableWatchdog)   { $enableWatchdog = $configJson.antiTamper.enableWatchdog }
+    } catch {
+        # Use defaults if config parsing fails
+    }
+}
+
+# 3. Helper Logging Function
 function Log-Message {
     param (
         [string]$Message,
@@ -49,6 +77,7 @@ try {
 
     Log-Message "Starting Bahga Tracker Installation..." "INFO" Cyan
     Log-Message "Script Directory: $scriptSource" "INFO" Gray
+    Log-Message "Log Root: $logRoot" "INFO" Gray
 
     # --- Check Administrator Privileges ---
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -89,19 +118,26 @@ try {
     }
 
     # --- Step 2: Create log directory and copy scripts ---
-    $logRoot = "C:\ActivityLogs"
     Log-Message "`n2) Creating log directory ($logRoot) and copying scripts..." "INFO" Cyan
     try {
         New-Item -ItemType Directory -Path $logRoot -Force -ErrorAction Stop | Out-Null
 
-        $filesToCopy = @("StartupLogger.ps1", "DailySummary.ps1", "WeeklyArchive.ps1", "BackupLogs.ps1")
+        $filesToCopy = @(
+            "StartupLogger.ps1",
+            "DailySummary.ps1",
+            "WeeklyArchive.ps1",
+            "BackupLogs.ps1",
+            "ConfigLoader.ps1",
+            "TaskWatchdog.ps1",
+            "config.json"
+        )
         foreach ($file in $filesToCopy) {
             $src = Join-Path $scriptSource $file
             if (Test-Path $src) {
                 Copy-Item $src "$logRoot\$file" -Force -ErrorAction Stop
                 Log-Message "Copied: $file -> $logRoot\$file" "INFO" Gray
             } else {
-                throw "Source file missing: $src"
+                Log-Message "WARNING: Optional file missing (skipped): $file" "WARNING" Yellow
             }
         }
 
@@ -114,8 +150,41 @@ try {
         $hasError = $true
     }
 
-    # --- Step 3: Register Scheduled Tasks ---
-    Log-Message "`n3) Registering Scheduled Tasks..." "INFO" Cyan
+    # --- Step 3: Set NTFS Permissions (Anti-Tamper) ---
+    if ($setPermissions) {
+        Log-Message "`n3) Setting NTFS permissions (Anti-Tamper)..." "INFO" Cyan
+        try {
+            $acl = Get-Acl $logRoot
+            $acl.SetAccessRuleProtection($true, $false)  # Disable inheritance
+
+            # SYSTEM — Full Control
+            $sysRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                "SYSTEM", "FullControl",
+                "ContainerInherit,ObjectInherit", "None", "Allow"
+            )
+            # Administrators — Read & Execute (can view reports but not tamper easily)
+            $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                "Administrators", "ReadAndExecute",
+                "ContainerInherit,ObjectInherit", "None", "Allow"
+            )
+
+            $acl.AddAccessRule($sysRule)
+            $acl.AddAccessRule($adminRule)
+            Set-Acl $logRoot $acl -ErrorAction Stop
+
+            Log-Message "[OK] NTFS permissions set: SYSTEM=FullControl, Admins=ReadOnly." "SUCCESS" Green
+            $summary.Add("[SUCCESS] Anti-Tamper NTFS Permissions")
+        } catch {
+            Log-Message "[FAIL] Error setting NTFS permissions: $($_.Exception.Message)" "ERROR" Red
+            Log-Message "This is non-critical; scripts will still work." "WARNING" Yellow
+            $summary.Add("[WARN] Anti-Tamper Permissions (non-critical)")
+        }
+    } else {
+        Log-Message "`n3) NTFS permissions skipped (disabled in config)." "INFO" Gray
+    }
+
+    # --- Step 4: Register Scheduled Tasks ---
+    Log-Message "`n4) Registering Scheduled Tasks..." "INFO" Cyan
     try {
         $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 
@@ -124,18 +193,18 @@ try {
             -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$logRoot\StartupLogger.ps1`""
         $trigLog1 = New-ScheduledTaskTrigger -AtStartup
         $trigLog2 = New-ScheduledTaskTrigger -Once -At (Get-Date) `
-            -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
+            -RepetitionInterval (New-TimeSpan -Minutes $logIntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
         Register-ScheduledTask -TaskName "ActivityLogger" -Action $actLog `
             -Trigger $trigLog1, $trigLog2 -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Log-Message "Registered Scheduled Task: ActivityLogger" "SUCCESS" Green
+        Log-Message "Registered Scheduled Task: ActivityLogger (every ${logIntervalMinutes}min)" "SUCCESS" Green
 
         # Task 2: DailySummary
         $actSum = New-ScheduledTaskAction -Execute "powershell.exe" `
             -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$logRoot\DailySummary.ps1`""
-        $trigSum = New-ScheduledTaskTrigger -Daily -At "23:55"
+        $trigSum = New-ScheduledTaskTrigger -Daily -At $summaryTime
         Register-ScheduledTask -TaskName "DailySummary" -Action $actSum `
             -Trigger $trigSum -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Log-Message "Registered Scheduled Task: DailySummary" "SUCCESS" Green
+        Log-Message "Registered Scheduled Task: DailySummary (daily at $summaryTime)" "SUCCESS" Green
 
         # Task 3: WeeklyArchive
         $actArc = New-ScheduledTaskAction -Execute "powershell.exe" `
@@ -143,18 +212,32 @@ try {
         $trigArc = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "03:00"
         Register-ScheduledTask -TaskName "WeeklyArchive" -Action $actArc `
             -Trigger $trigArc -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Log-Message "Registered Scheduled Task: WeeklyArchive" "SUCCESS" Green
+        Log-Message "Registered Scheduled Task: WeeklyArchive (Sunday 03:00)" "SUCCESS" Green
 
         # Task 4: LogBackup
         $actBak = New-ScheduledTaskAction -Execute "powershell.exe" `
             -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$logRoot\BackupLogs.ps1`""
         $trigBak = New-ScheduledTaskTrigger -Once -At (Get-Date) `
-            -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+            -RepetitionInterval (New-TimeSpan -Hours $backupIntervalHours) -RepetitionDuration (New-TimeSpan -Days 3650)
         Register-ScheduledTask -TaskName "LogBackup" -Action $actBak `
             -Trigger $trigBak -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Log-Message "Registered Scheduled Task: LogBackup" "SUCCESS" Green
+        Log-Message "Registered Scheduled Task: LogBackup (every ${backupIntervalHours}h)" "SUCCESS" Green
 
-        $summary.Add("[SUCCESS] 4 Scheduled Tasks registered")
+        $taskCount = 4
+
+        # Task 5: TaskWatchdog (if enabled)
+        if ($enableWatchdog) {
+            $actWd = New-ScheduledTaskAction -Execute "powershell.exe" `
+                -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$logRoot\TaskWatchdog.ps1`""
+            $trigWd = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+                -RepetitionInterval (New-TimeSpan -Minutes $watchdogIntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
+            Register-ScheduledTask -TaskName "TaskWatchdog" -Action $actWd `
+                -Trigger $trigWd -Principal $principal -Force -ErrorAction Stop | Out-Null
+            Log-Message "Registered Scheduled Task: TaskWatchdog (every ${watchdogIntervalMinutes}min)" "SUCCESS" Green
+            $taskCount = 5
+        }
+
+        $summary.Add("[SUCCESS] $taskCount Scheduled Tasks registered")
     } catch {
         Log-Message "[FAIL] Error registering scheduled tasks: $($_.Exception.Message)" "ERROR" Red
         $summary.Add("[FAIL] Scheduled Tasks registration")
@@ -169,6 +252,8 @@ try {
     foreach ($item in $summary) {
         if ($item -like "*[SUCCESS]*") {
             Log-Message $item "SUCCESS" Green
+        } elseif ($item -like "*[WARN]*") {
+            Log-Message $item "WARNING" Yellow
         } else {
             Log-Message $item "ERROR" Red
         }
@@ -177,6 +262,7 @@ try {
     if (-not $hasError) {
         Log-Message "`n[OK] Installation completed successfully!" "SUCCESS" Green
         Log-Message "Logs folder: $logRoot" "INFO" Cyan
+        Log-Message "Config file: $logRoot\config.json" "INFO" Cyan
     } else {
         Log-Message "`n[!] Installation completed with ERRORS." "ERROR" Red
         Log-Message "Please check details in: $installLog" "WARNING" Yellow

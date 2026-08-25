@@ -1,0 +1,109 @@
+{
+    "logRoot": "C:\\ActivityLogs",
+    "backupPath": "D:\\ActivityBackup",
+
+    "logIntervalMinutes": 15,
+    "summaryTime": "23:55",
+    "archiveDaysThreshold": 7,
+    "backupIntervalHours": 1,
+
+    "excludeProcesses": [
+        "svchost.exe",
+        "csrss.exe",
+        "System",
+        "smss.exe",
+        "wininit.exe",
+        "services.exe",
+        "lsass.exe",
+        "RuntimeBroker.exe",
+        "SearchIndexer.exe",
+        "conhost.exe",
+        "dllhost.exe",
+        "taskhostw.exe",
+        "spoolsv.exe",
+        "fontdrvhost.exe",
+        "WmiPrvSE.exe",
+        "Memory Compression",
+        "Registry",
+        "System Idle Process",
+        "dwm.exe",
+        "sihost.exe",
+        "ctfmon.exe",
+        "SecurityHealthService.exe",
+        "MsMpEng.exe",
+        "NisSrv.exe",
+        "SearchHost.exe",
+        "StartMenuExperienceHost.exe",
+        "TextInputHost.exe",
+        "ShellExperienceHost.exe",
+        "ApplicationFrameHost.exe",
+        "SystemSettings.exe",
+        "backgroundTaskHost.exe",
+        "CompPkgSrv.exe",
+        "audiodg.exe",
+        "WUDFHost.exe",
+        "dasHost.exe",
+        "LsaIso.exe",
+        "sgrmbroker.exe",
+        "SgrmBroker.exe",
+        "uhssvc.exe"
+    ],
+
+    "blacklistedApps": {
+        "games": [
+            "*steam*",
+            "*epicgames*",
+            "*minecraft*",
+            "*fortnite*",
+            "*roblox*",
+            "*valorant*",
+            "*league*",
+            "*pubg*",
+            "*gta*",
+            "*fifa*",
+            "*riot*",
+            "*battle.net*",
+            "*origin.exe*",
+            "*gameloop*",
+            "*bluestacks*"
+        ],
+        "social": [
+            "*telegram*",
+            "*discord*",
+            "*whatsapp*",
+            "*snapchat*",
+            "*tiktok*",
+            "*instagram*"
+        ],
+        "vpn": [
+            "*vpn*",
+            "*proxy*",
+            "*tor.exe*",
+            "*psiphon*",
+            "*windscribe*",
+            "*tunnelbear*",
+            "*hotspotshield*",
+            "*nordvpn*",
+            "*expressvpn*",
+            "*openvpn*"
+        ],
+        "torrent": [
+            "*utorrent*",
+            "*bittorrent*",
+            "*qbittorrent*",
+            "*deluge*",
+            "*transmission*"
+        ]
+    },
+
+    "alerts": {
+        "enabled": true,
+        "logFile": "alerts.log"
+    },
+
+    "antiTamper": {
+        "setPermissions": true,
+        "enableWatchdog": true,
+        "watchdogIntervalMinutes": 30
+    }
+}

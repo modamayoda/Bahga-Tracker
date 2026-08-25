@@ -1,20 +1,27 @@
 @echo off
-:: =============================================================
-:: Install.bat - One-Click Installer for Bahga Tracker
-:: Auto-elevates to Administrator and runs Install.ps1 with full logging
-:: =============================================================
+setlocal EnableDelayedExpansion
 
 title Bahga Tracker Installer
+
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set "PS_SCRIPT=%SCRIPT_DIR%\Install.ps1"
+set "LOG_FILE=%SCRIPT_DIR%\install_log.txt"
+
+echo ===================================================
+echo           Bahga Tracker Setup Installer            
+echo ===================================================
+echo.
 
 :: Check for Administrator privileges
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo ===================================================
     echo [!] Requesting Administrator privileges...
-    echo ===================================================
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    if %errorLevel% neq 0 (
-        echo [X] Failed to elevate to Administrator or cancelled by user.
+    echo.
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/k \"\"%~f0\"\"' -Verb RunAs"
+    if !errorLevel! neq 0 (
+        echo [X] Could not elevate privileges or operation was cancelled by user.
+        echo [X] Elevation Error - Cancelled or failed > "%LOG_FILE%"
         echo.
         echo Press any key to exit...
         pause >nul
@@ -22,22 +29,19 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0"
-echo ===================================================
-echo           Bahga Tracker Setup Installer            
-echo ===================================================
+:: Running as Administrator — change to script directory
+cd /d "%SCRIPT_DIR%"
+echo Running installer script...
 echo.
-echo Running setup script and logging output...
-echo.
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%~dp0Install.ps1'"
+powershell -NoProfile -ExecutionPolicy Bypass -NoExit -File "%PS_SCRIPT%"
 
 echo.
 echo ===================================================
-echo Setup finished. If any error occurred, check:
-echo %~dp0install_log.txt
+echo Process completed. Check log if needed:
+echo %LOG_FILE%
 echo ===================================================
 echo.
 echo Press any key to exit...
 pause >nul
+
 

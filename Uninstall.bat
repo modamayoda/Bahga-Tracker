@@ -1,20 +1,27 @@
 @echo off
-:: =============================================================
-:: Uninstall.bat - One-Click Uninstaller for Bahga Tracker
-:: Auto-elevates to Administrator and runs Uninstall.ps1 with logging
-:: =============================================================
+setlocal EnableDelayedExpansion
 
 title Bahga Tracker Uninstaller
+
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set "PS_SCRIPT=%SCRIPT_DIR%\Uninstall.ps1"
+set "LOG_FILE=%SCRIPT_DIR%\uninstall_log.txt"
+
+echo ===================================================
+echo           Bahga Tracker Uninstaller                
+echo ===================================================
+echo.
 
 :: Check for Administrator privileges
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo ===================================================
     echo [!] Requesting Administrator privileges...
-    echo ===================================================
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    if %errorLevel% neq 0 (
-        echo [X] Failed to elevate to Administrator or cancelled by user.
+    echo.
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/k \"\"%~f0\"\"' -Verb RunAs"
+    if !errorLevel! neq 0 (
+        echo [X] Could not elevate privileges or operation was cancelled by user.
+        echo [X] Elevation Error - Cancelled or failed > "%LOG_FILE%"
         echo.
         echo Press any key to exit...
         pause >nul
@@ -22,22 +29,19 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0"
-echo ===================================================
-echo           Bahga Tracker Uninstaller                
-echo ===================================================
+:: Running as Administrator — change to script directory
+cd /d "%SCRIPT_DIR%"
+echo Running uninstaller script...
 echo.
-echo Running uninstall script and logging output...
-echo.
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%~dp0Uninstall.ps1'"
+powershell -NoProfile -ExecutionPolicy Bypass -NoExit -File "%PS_SCRIPT%"
 
 echo.
 echo ===================================================
-echo Uninstall process finished. Check log if needed:
-echo %~dp0uninstall_log.txt
+echo Process completed. Check log if needed:
+echo %LOG_FILE%
 echo ===================================================
 echo.
 echo Press any key to exit...
 pause >nul
+
 

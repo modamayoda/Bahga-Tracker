@@ -187,6 +187,10 @@ try {
 } catch {
     Log-Message "`n[FATAL ERROR] An unexpected error occurred: $($_.Exception.Message)" "ERROR" Red
     Log-Message "Stack Trace: $($_.ScriptStackTrace)" "ERROR" Red
+} finally {
+    Write-Host ""
+    Write-Host "====================================================" -ForegroundColor Yellow
+    Write-Host "  Press ENTER to close this window..." -ForegroundColor Yellow
+    Write-Host "====================================================" -ForegroundColor Yellow
+    Read-Host
 }
-
-

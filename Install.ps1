@@ -18,7 +18,7 @@ Write-Host "2) Creating and hiding log directory..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 
 # Copy scripts from current directory to the log directory
-$scriptSource = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptSource = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 Copy-Item "$scriptSource\StartupLogger.ps1" "$logRoot\StartupLogger.ps1" -Force
 Copy-Item "$scriptSource\DailySummary.ps1"  "$logRoot\DailySummary.ps1"  -Force
 Copy-Item "$scriptSource\WeeklyArchive.ps1" "$logRoot\WeeklyArchive.ps1" -Force
